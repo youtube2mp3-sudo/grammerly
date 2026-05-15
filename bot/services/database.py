@@ -17,6 +17,18 @@ class Database:
     async def init(self) -> None:
         self._pool = await asyncpg.create_pool(self._url, min_size=2, max_size=10)
         logger.info("Database pool created.")
+        await self._run_migrations()
+
+    async def _run_migrations(self) -> None:
+        """Apply any pending schema changes idempotently."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                ALTER TABLE guild_settings
+                ADD COLUMN IF NOT EXISTS monitored_channel_id BIGINT;
+                """
+            )
+        logger.info("Schema migration applied (monitored_channel_id).")
 
     async def close(self) -> None:
         if self._pool:
