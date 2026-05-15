@@ -1,45 +1,95 @@
-# [Project name]
+# Grammerly
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A public-ready Discord spell-correction bot that automatically corrects spelling in a designated channel, with per-server configuration, leaderboards, and Supabase-backed storage.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `cd bot && pip install -r requirements.txt && python main.py` — run the bot
+- Required env vars: `DISCORD_TOKEN`, `DATABASE_URL` (Supabase PostgreSQL URL)
+- Optional env vars: `TARGET_CHANNEL_ID`, `SUPPORT_SERVER_URL`, `BOT_WEBSITE`, `TOPGG_URL`
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Python 3.11+
+- discord.py 2.x (slash commands via app_commands)
+- asyncpg — PostgreSQL async driver connecting to Supabase
+- pyspellchecker — spell checking engine
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `bot/main.py` — entry point, bot class, startup hooks
+- `bot/config/settings.py` — all env var loading
+- `bot/services/database.py` — asyncpg connection pool
+- `bot/services/tracker.py` — correction count reads/writes + leaderboards
+- `bot/services/guild_settings.py` — per-server visibility and response type
+- `bot/services/whitelist_service.py` — global + per-server whitelist (DB-backed with in-memory cache)
+- `bot/services/spellcheck.py` — spell-check logic using WhitelistService
+- `bot/cogs/commands.py` — general commands: latency, uptime, corrections, leaderboard-server, leaderboard-global, support, invite, vote, help
+- `bot/cogs/config.py` — configure-visibility, configure-responses, whitelist-view
+- `bot/cogs/whitelist.py` — whitelist-word (per-server)
+- `bot/cogs/listener.py` — on_message handler
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Database is Supabase PostgreSQL via asyncpg — no SQLite, no local files for whitelist
+- Whitelist is split: global (applies everywhere) vs per-server (managed by server staff)
+- WhitelistService uses in-memory caching: global loaded at startup, per-guild loaded lazily on first use and invalidated on write
+- Default response visibility is `public`, default response type is `plain` (no embeds unless configured)
+- SpellCheckService.find_corrections() is synchronous; the listener pre-loads the guild cache before calling it
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Monitors a designated channel and auto-corrects spelling mistakes
+- Per-server whitelists let server managers add words to ignore
+- Global leaderboard (users and servers) and per-server leaderboard
+- Configurable: private vs public responses, plain vs embed format (per server)
+- /invite, /support, /vote, /help commands for discoverability
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- SQL for Supabase must be provided in chat only — not inserted into the repo
+- Do not break, remove, or change anything beyond what is explicitly requested
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run `pip install -r requirements.txt` inside the `bot/` directory before starting
+- `DATABASE_URL` must be the full Supabase PostgreSQL URI (not the REST/anon key)
+- Command tree is synced globally on startup — slash command changes may take up to an hour to propagate on Discord
 
-## Pointers
+## Supabase SQL Schema
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+Run this once in the Supabase SQL Editor before starting the bot:
+
+```sql
+CREATE TABLE IF NOT EXISTS corrections (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    guild_id TEXT NOT NULL,
+    correction_count INTEGER NOT NULL DEFAULT 0,
+    last_corrected TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, guild_id)
+);
+CREATE INDEX IF NOT EXISTS idx_corrections_guild ON corrections(guild_id);
+CREATE INDEX IF NOT EXISTS idx_corrections_user ON corrections(user_id);
+
+CREATE TABLE IF NOT EXISTS guild_settings (
+    guild_id TEXT PRIMARY KEY,
+    response_visibility TEXT NOT NULL DEFAULT 'public',
+    response_type TEXT NOT NULL DEFAULT 'plain'
+);
+
+CREATE TABLE IF NOT EXISTS guild_whitelist (
+    id BIGSERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    word TEXT NOT NULL,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(guild_id, word)
+);
+CREATE INDEX IF NOT EXISTS idx_guild_whitelist_guild ON guild_whitelist(guild_id);
+
+CREATE TABLE IF NOT EXISTS global_whitelist (
+    id BIGSERIAL PRIMARY KEY,
+    word TEXT NOT NULL UNIQUE,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
