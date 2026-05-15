@@ -28,11 +28,14 @@ def _parse_input(raw: str) -> list[str]:
 
 class WhitelistCog(commands.Cog, name="Whitelist"):
     """
-    /whitelist-word — add words to this server's whitelist (per-server).
+    /whitelist-word         -- add words to this server's whitelist.
+    /global-whitelist-add   -- add words to the global whitelist (bot owner only).
     """
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+
+    # /whitelist-word
 
     @app_commands.command(
         name="whitelist-word",
@@ -78,17 +81,13 @@ class WhitelistCog(commands.Cog, name="Whitelist"):
             if added:
                 logger.info(
                     "%s (%s) whitelisted '%s' in guild %s.",
-                    interaction.user,
-                    interaction.user.id,
-                    tokens[0],
-                    guild_id,
+                    interaction.user, interaction.user.id, tokens[0], guild_id,
                 )
             return
 
         added_count, skipped_count = await self.bot.whitelist_service.add_server_words_batch(
             guild_id, tokens
         )
-
         if added_count == 0:
             msg = "All words already exist in this server's whitelist."
         elif skipped_count == 0:
@@ -97,15 +96,55 @@ class WhitelistCog(commands.Cog, name="Whitelist"):
         else:
             word = "word" if added_count == 1 else "words"
             msg = f"Added {added_count} new {word}. {skipped_count} already existed."
-
         await interaction.response.send_message(msg, ephemeral=ephemeral)
         logger.info(
             "%s (%s) batch whitelisted in guild %s: added=%d skipped=%d.",
-            interaction.user,
-            interaction.user.id,
-            guild_id,
-            added_count,
-            skipped_count,
+            interaction.user, interaction.user.id, guild_id, added_count, skipped_count,
+        )
+
+    # /global-whitelist-add  (bot owner only)
+
+    @app_commands.command(
+        name="global-whitelist-add",
+        description="Add words to the global whitelist (applies in every server). Bot owner only.",
+    )
+    @app_commands.describe(
+        words="Word or phrase to add globally. Separate multiple entries with commas."
+    )
+    async def global_whitelist_add(
+        self, interaction: discord.Interaction, words: str
+    ) -> None:
+        if not await self.bot.is_owner(interaction.user):
+            await interaction.response.send_message(
+                "This command is restricted to the bot owner.", ephemeral=True
+            )
+            return
+
+        tokens = _parse_input(words)
+        if not tokens:
+            await interaction.response.send_message(_EMPTY_INPUT, ephemeral=True)
+            return
+
+        if len(tokens) == 1:
+            added = await self.bot.whitelist_service.add_global_word(tokens[0])
+            msg = f"Added '{tokens[0]}' to the global whitelist." if added else f"'{tokens[0]}' is already in the global whitelist."
+            await interaction.response.send_message(msg, ephemeral=True)
+            logger.info("Owner added global word: '%s' (added=%s).", tokens[0], added)
+            return
+
+        added_count, skipped_count = await self.bot.whitelist_service.add_global_words_batch(tokens)
+        if added_count == 0:
+            msg = "All words already exist in the global whitelist."
+        elif skipped_count == 0:
+            word = "word" if added_count == 1 else "words"
+            msg = f"Added {added_count} {word} to the global whitelist."
+        else:
+            word = "word" if added_count == 1 else "words"
+            msg = f"Added {added_count} {word}. {skipped_count} already existed."
+        await interaction.response.send_message(msg, ephemeral=True)
+        logger.info(
+            "Owner batch global whitelist: added=%d skipped=%d.",
+            added_count, skipped_count,
         )
 
 
