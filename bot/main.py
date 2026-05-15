@@ -1,6 +1,7 @@
 import asyncio
+import time
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from config.settings import Settings
 from utils.logger import get_logger
@@ -45,6 +46,7 @@ class SpellBot(commands.Bot):
         self.guild_settings: GuildSettingsService = None
         self.whitelist_service: WhitelistService = None
         self.start_time: float = None
+        self._presence_tick: int = 0
 
     async def setup_hook(self) -> None:
         self.db = Database(self.settings.DATABASE_URL)
@@ -65,12 +67,42 @@ class SpellBot(commands.Bot):
         synced = await self.tree.sync()
         logger.info("Synced %d slash command(s).", len(synced))
 
+        self.presence_loop.start()
+
     async def on_ready(self) -> None:
-        import time
         self.start_time = time.monotonic()
         logger.info("Logged in as %s (ID: %s)", self.user, self.user.id)
         logger.info("Monitoring %d guild(s).", len(self.guilds))
         logger.info("grammerly.xyz")
+
+    @tasks.loop(seconds=30)
+    async def presence_loop(self) -> None:
+        """Rotate bot presence between server count and total corrections."""
+        try:
+            server_count = len(self.guilds)
+
+            if self._presence_tick % 2 == 0:
+                activity = discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"{server_count:,} server{'s' if server_count != 1 else ''}",
+                )
+            else:
+                from services.tracker import CorrectionTracker
+                tracker = CorrectionTracker(self.db)
+                total = await tracker.get_total_corrections()
+                activity = discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"{total:,} correction{'s' if total != 1 else ''} made",
+                )
+
+            await self.change_presence(status=discord.Status.online, activity=activity)
+            self._presence_tick += 1
+        except Exception as exc:
+            logger.warning("Presence update failed: %s", exc)
+
+    @presence_loop.before_loop
+    async def before_presence_loop(self) -> None:
+        await self.wait_until_ready()
 
 
 async def main() -> None:
