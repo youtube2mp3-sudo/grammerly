@@ -69,7 +69,7 @@ class WhitelistPaginatorView(discord.ui.View):
 
 
 class ConfigCog(commands.Cog, name="Config"):
-    """/configure-visibility, /configure-responses, and /whitelist-view."""
+    """/configure-visibility, /configure-responses, /configure-channel, and /whitelist-view."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -177,6 +177,39 @@ class ConfigCog(commands.Cog, name="Config"):
         logger.info(
             "%s (%s) set guild %s response_type to '%s'.",
             interaction.user, interaction.user.id, guild_id, type.value,
+        )
+
+    @app_commands.command(
+        name="configure-channel",
+        description="Set the channel Grammerly monitors for spell corrections in this server.",
+    )
+    @app_commands.describe(channel="The text channel to monitor. Grammerly will correct messages sent here.")
+    async def configure_channel(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ) -> None:
+        if not _has_configure_permission(interaction):
+            await interaction.response.send_message(
+                "You need the **Manage Server** permission to configure the correction channel.",
+                ephemeral=True,
+            )
+            return
+
+        guild_id = interaction.guild_id
+        if guild_id is None:
+            await interaction.response.send_message(
+                "This command can only be used inside a server.", ephemeral=True
+            )
+            return
+
+        await self.bot.guild_settings.set_monitored_channel(guild_id, channel.id)
+
+        await interaction.response.send_message(
+            f"Done! I'll now correct spelling in {channel.mention}.",
+            ephemeral=True,
+        )
+        logger.info(
+            "%s (%s) set guild %s monitored channel to #%s (%d).",
+            interaction.user, interaction.user.id, guild_id, channel.name, channel.id,
         )
 
 
