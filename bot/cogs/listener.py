@@ -55,7 +55,8 @@ class ListenerCog(commands.Cog, name="Listener"):
         if guild_id is not None:
             await self.bot.whitelist_service.ensure_guild_cache(guild_id)
 
-        corrections = self._spellcheck.find_corrections(content, guild_id)
+        # find_corrections is now async (API call + local fallback)
+        corrections = await self._spellcheck.find_corrections(content, guild_id)
         if not corrections:
             return
 
