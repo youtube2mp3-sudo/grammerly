@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ssl
 import asyncpg
 
 from utils.logger import get_logger
@@ -15,7 +16,10 @@ class Database:
         self._pool: asyncpg.Pool | None = None
 
     async def init(self) -> None:
-        self._pool = await asyncpg.create_pool(self._url, min_size=2, max_size=10)
+        ssl_ctx = ssl.create_default_context()
+        self._pool = await asyncpg.create_pool(
+            self._url, min_size=2, max_size=10, ssl=ssl_ctx
+        )
         logger.info("Database pool created.")
 
     async def close(self) -> None:
