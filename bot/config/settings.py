@@ -23,5 +23,11 @@ class Settings:
     GITHUB_STATS_PAT: str = os.environ.get("GITHUB_STATS_PAT", "")
     GITHUB_STATS_REPO: str = os.environ.get("GITHUB_STATS_REPO", "")
 
+    # RapidAPI key for the GrammarBot grammar+spelling API.
+    # When set, the bot uses the API for richer corrections and falls back
+    # to the local pyspellchecker if the API is unavailable.
+    # Leave blank to use the local checker only.
+    RAPIDAPI_KEY: str = os.environ.get("RAPIDAPI_KEY", "")
+
     SPELL_DISTANCE: int = 1
     MIN_WORD_LENGTH: int = 3
