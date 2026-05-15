@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 class Settings:
     """Central configuration loaded from environment variables."""
 
-    DISCORD_TOKEN: str = os.environ["DISCORD_TOKEN"]
+    DISCORD_TOKEN: str = os.environ["BOT_TOKEN"]
     TARGET_CHANNEL_ID: int = int(os.environ.get("TARGET_CHANNEL_ID", "0"))
 
     DATABASE_URL: str = os.environ["DATABASE_URL"]
