@@ -71,6 +71,32 @@ class StatsCog(commands.Cog, name="Stats"):
         await self.bot.wait_until_ready()
         await asyncio.sleep(5)
 
+    async def _collect_guild_data(self) -> list[dict]:
+        """Build the per-guild payload for servers.json (up to 30 servers by member count)."""
+        # Get per-guild correction totals from DB
+        rows = await self._tracker.get_global_server_leaderboard(limit=200)
+        corrections_by_guild: dict[str, int] = {
+            str(r["guild_id"]): int(r["correction_count"]) for r in rows
+        }
+
+        guilds = []
+        for guild in self.bot.guilds:
+            gid = str(guild.id)
+            icon_url: str | None = None
+            if guild.icon:
+                icon_url = str(guild.icon.with_size(128).url)
+            guilds.append({
+                "id": gid,
+                "name": guild.name,
+                "icon_url": icon_url,
+                "member_count": guild.member_count or 0,
+                "corrections": corrections_by_guild.get(gid, 0),
+            })
+
+        # Sort by member count descending; surface top 30
+        guilds.sort(key=lambda g: g["member_count"], reverse=True)
+        return guilds[:30]
+
     async def _push(self, pusher: StatsPusher) -> None:
         try:
             server_count = len(self.bot.guilds)
@@ -82,7 +108,8 @@ class StatsCog(commands.Cog, name="Stats"):
                 elapsed = time.monotonic() - self.bot.start_time
                 uptime_str = _format_uptime(elapsed)
             updated_at = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-            data = {
+
+            stats_data = {
                 "servers": server_count,
                 "corrections": total_corrections,
                 "latency_ms": latency_ms,
@@ -91,7 +118,14 @@ class StatsCog(commands.Cog, name="Stats"):
                 "status": "online",
                 "updated_at": updated_at,
             }
-            await pusher.push(data)
+
+            guild_data = await self._collect_guild_data()
+
+            # Push both files concurrently
+            await asyncio.gather(
+                pusher.push(stats_data),
+                pusher.push_servers(guild_data),
+            )
         except Exception:
             logger.exception("Error during stats push.")
 
