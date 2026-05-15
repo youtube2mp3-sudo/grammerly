@@ -63,7 +63,7 @@ class WhitelistService:
     def contains_ignored_phrase_sync(self, guild_id: int | None, content: str) -> set[str]:
         """
         Return whitelisted phrases (multi-word entries) found in *content*.
-        Uses cached data — call ensure_guild_cache() first.
+        Uses cached data -- call ensure_guild_cache() first.
         """
         normalised = content.lower()
         found: set[str] = set()
@@ -85,10 +85,59 @@ class WhitelistService:
         await self.ensure_guild_cache(guild_id)
         return sorted(self._guild_cache.get(str(guild_id), set()))
 
+    async def add_global_word(self, word: str) -> bool:
+        """Add *word* to the global whitelist. Returns True if added, False if duplicate."""
+        normalised = word.strip().lower()
+        if not normalised:
+            return False
+        if normalised in self._global_cache:
+            return False
+        async with self._lock:
+            if normalised in self._global_cache:
+                return False
+            async with self._db.pool.acquire() as conn:
+                try:
+                    await conn.execute(
+                        "INSERT INTO global_whitelist (word) VALUES ($1) ON CONFLICT DO NOTHING",
+                        normalised,
+                    )
+                except Exception:
+                    return False
+            self._global_cache.add(normalised)
+        logger.info("Global whitelist: added '%s'.", normalised)
+        return True
+
+    async def add_global_words_batch(self, words: list[str]) -> tuple[int, int]:
+        """Batch-add words to the global whitelist. Returns (added, skipped)."""
+        seen: set[str] = set()
+        to_add: list[str] = []
+        skipped = 0
+        for raw in words:
+            normalised = raw.strip().lower()
+            if not normalised or normalised in seen:
+                continue
+            seen.add(normalised)
+            if normalised in self._global_cache:
+                skipped += 1
+            else:
+                to_add.append(normalised)
+        if not to_add:
+            return 0, skipped
+        async with self._lock:
+            truly_new = [w for w in to_add if w not in self._global_cache]
+            skipped += len(to_add) - len(truly_new)
+            if truly_new:
+                async with self._db.pool.acquire() as conn:
+                    await conn.executemany(
+                        "INSERT INTO global_whitelist (word) VALUES ($1) ON CONFLICT DO NOTHING",
+                        [(w,) for w in truly_new],
+                    )
+                self._global_cache.update(truly_new)
+        logger.info("Global whitelist batch: added %d, skipped %d.", len(truly_new), skipped)
+        return len(truly_new), skipped
+
     async def add_server_word(self, guild_id: int, word: str) -> bool:
-        """
-        Add *word* to the guild whitelist. Returns True if added, False if duplicate.
-        """
+        """Add *word* to the guild whitelist. Returns True if added, False if duplicate."""
         normalised = word.strip().lower()
         if not normalised:
             return False
@@ -96,7 +145,6 @@ class WhitelistService:
         await self.ensure_guild_cache(guild_id)
         if normalised in self._guild_cache.get(guild_key, set()):
             return False
-
         async with self._lock:
             await self.ensure_guild_cache(guild_id)
             if normalised in self._guild_cache.get(guild_key, set()):
@@ -111,21 +159,16 @@ class WhitelistService:
                 except Exception:
                     return False
             self._guild_cache.setdefault(guild_key, set()).add(normalised)
-
         logger.info("Guild %s whitelisted word: '%s'.", guild_id, normalised)
         return True
 
     async def add_server_words_batch(
         self, guild_id: int, words: list[str]
     ) -> tuple[int, int]:
-        """
-        Batch-add words to the guild whitelist.
-        Returns (added_count, skipped_count).
-        """
+        """Batch-add words to the guild whitelist. Returns (added_count, skipped_count)."""
         guild_key = str(guild_id)
         await self.ensure_guild_cache(guild_id)
         existing = self._guild_cache.get(guild_key, set())
-
         seen: set[str] = set()
         to_add: list[str] = []
         skipped = 0
@@ -138,10 +181,8 @@ class WhitelistService:
                 skipped += 1
             else:
                 to_add.append(normalised)
-
         if not to_add:
             return 0, skipped
-
         async with self._lock:
             existing = self._guild_cache.get(guild_key, set())
             truly_new = [w for w in to_add if w not in existing]
@@ -153,6 +194,5 @@ class WhitelistService:
                         [(guild_key, w) for w in truly_new],
                     )
                 self._guild_cache.setdefault(guild_key, set()).update(truly_new)
-
         logger.info("Guild %s batch whitelist: added %d, skipped %d.", guild_id, len(truly_new), skipped)
         return len(truly_new), skipped
