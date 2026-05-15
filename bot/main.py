@@ -24,6 +24,7 @@ COGS = [
     "cogs.config",
     "cogs.customize",
     "cogs.owner",
+    "cogs.stats",
 ]
 
 
@@ -68,33 +69,14 @@ class SpellBot(commands.Bot):
         import time
         self.start_time = time.monotonic()
         logger.info("Logged in as %s (ID: %s)", self.user, self.user.id)
-        logger.info("Monitoring channel ID: %s", self.settings.TARGET_CHANNEL_ID)
-
-        try:
-            await self.user.edit(bio="grammerly.xyz")
-            logger.info("Bot note set to 'grammerly.xyz'.")
-        except Exception:
-            logger.warning("Could not set bot note. This may not be supported in this context.")
-
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name="your spelling",
-            )
-        )
-
-    async def close(self) -> None:
-        await self.db.close()
-        await super().close()
-
-    async def on_error(self, event_method: str, *args, **kwargs) -> None:
-        logger.exception("Unhandled error in event '%s'.", event_method)
+        logger.info("Monitoring %d guild(s).", len(self.guilds))
+        logger.info("grammerly.xyz")
 
 
 async def main() -> None:
-    print(BANNER)
     bot = SpellBot()
     async with bot:
+        print(BANNER)
         await bot.start(bot.settings.DISCORD_TOKEN)
 
 
