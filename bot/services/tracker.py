@@ -39,6 +39,14 @@ class CorrectionTracker:
             )
         return row["correction_count"] if row else 0
 
+    async def get_total_corrections(self) -> int:
+        """Return the total number of corrections recorded across all users and guilds."""
+        async with self._db.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT COALESCE(SUM(correction_count), 0) AS total FROM corrections"
+            )
+        return int(row["total"]) if row else 0
+
     async def get_server_leaderboard(self, guild_id: int, limit: int = 10) -> list[dict]:
         """Return top *limit* users in *guild_id* ordered by correction count."""
         async with self._db.pool.acquire() as conn:
