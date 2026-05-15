@@ -40,6 +40,7 @@ _HELP_PAGES = [
     {
         "title": "Grammerly  /  Configuration",
         "commands": [
+            ("/configure-channel <channel>", "Set the channel Grammerly monitors for corrections. Requires Manage Server."),
             ("/configure-visibility <mode>", "Set responses to private or public. Requires Manage Server."),
             ("/configure-responses <type>", "Set responses to plain or embed format. Requires Manage Server."),
             ("/customize-name <name>", "Set the bot nickname for this server. Requires Administrator."),
@@ -308,67 +309,56 @@ class CommandsCog(commands.Cog, name="Commands"):
     async def invite(self, interaction: discord.Interaction) -> None:
         guild_id = interaction.guild_id
         ephemeral = await self.bot.guild_settings.is_ephemeral(guild_id)
-        bot_id = self.bot.user.id
-        permissions = discord.Permissions(
-            read_messages=True,
-            send_messages=True,
-            read_message_history=True,
+        app_id = self.bot.application_id
+        url = (
+            f"https://discord.com/api/oauth2/authorize?client_id={app_id}"
+            "&permissions=274877908992&scope=bot%20applications.commands"
         )
-        invite_url = discord.utils.oauth_url(bot_id, permissions=permissions)
-        view = discord.ui.View()
-        view.add_item(discord.ui.Button(label="Invite Grammerly", url=invite_url, style=discord.ButtonStyle.link))
         if await self._use_embed(guild_id):
             color = await self._get_color(guild_id)
             embed = discord.Embed(
                 title="Invite Grammerly",
-                description="Click the button below to add Grammerly to your server.",
+                description=f"[Click here to invite Grammerly]({url})",
                 colour=color,
             )
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=ephemeral)
+            await _send(interaction, embed=embed, ephemeral=ephemeral)
         else:
-            await interaction.response.send_message(
-                "Click the button below to add Grammerly to your server.",
-                view=view, ephemeral=ephemeral,
-            )
+            await _send(interaction, content=f"Invite Grammerly: {url}", ephemeral=ephemeral)
 
     @app_commands.command(name="donate", description="Support Grammerly and help keep it running.")
     async def donate(self, interaction: discord.Interaction) -> None:
         guild_id = interaction.guild_id
         ephemeral = await self.bot.guild_settings.is_ephemeral(guild_id)
         donate_url = self.bot.settings.DONATE_URL
-        view = discord.ui.View()
-        if donate_url:
-            view.add_item(discord.ui.Button(label="Donate", url=donate_url, style=discord.ButtonStyle.link))
-        msg = (
-            "Grammerly is free and always will be. "
-            "If you find it useful, consider donating to help cover hosting costs and keep it running."
-        )
         if await self._use_embed(guild_id):
             color = await self._get_color(guild_id)
-            embed = discord.Embed(title="Support Grammerly", description=msg, colour=color)
-            await interaction.response.send_message(
-                embed=embed,
-                view=view if donate_url else discord.utils.MISSING,
-                ephemeral=ephemeral,
-            )
+            embed = discord.Embed(title="Support Grammerly", colour=color)
+            if donate_url:
+                embed.description = f"[Donate here]({donate_url}) — every bit helps keep the bot running!"
+            else:
+                embed.description = "Donation link not yet configured."
+            await _send(interaction, embed=embed, ephemeral=ephemeral)
         else:
-            await interaction.response.send_message(
-                msg,
-                view=view if donate_url else discord.utils.MISSING,
-                ephemeral=ephemeral,
-            )
+            if donate_url:
+                await _send(interaction, content=f"Donate: {donate_url}", ephemeral=ephemeral)
+            else:
+                await _send(interaction, content="Donation link not yet configured.", ephemeral=ephemeral)
 
-    @app_commands.command(name="help", description="Show all available Grammerly commands.")
+    @app_commands.command(name="help", description="Show the Grammerly help menu.")
     async def help(self, interaction: discord.Interaction) -> None:
         guild_id = interaction.guild_id
         ephemeral = await self.bot.guild_settings.is_ephemeral(guild_id)
         use_embed = await self._use_embed(guild_id)
         color = await self._get_color(guild_id)
-        view = HelpPaginatorView(use_embed=use_embed, color=color)
+        view = HelpPaginatorView(use_embed, color)
         if use_embed:
-            await interaction.response.send_message(embed=view.build_embed(), view=view, ephemeral=ephemeral)
+            await interaction.response.send_message(
+                embed=view.build_embed(), view=view, ephemeral=ephemeral
+            )
         else:
-            await interaction.response.send_message(view.build_text(), view=view, ephemeral=ephemeral)
+            await interaction.response.send_message(
+                view.build_text(), view=view, ephemeral=ephemeral
+            )
 
 
 async def setup(bot: commands.Bot) -> None:
