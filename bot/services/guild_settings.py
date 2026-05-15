@@ -89,3 +89,31 @@ class GuildSettingsService:
             return False
         mode = await self.get_response_visibility(guild_id)
         return mode == "private"
+
+    async def get_monitored_channel(self, guild_id: int) -> int | None:
+        """Return the channel ID the bot should monitor for this guild, or None if not set."""
+        try:
+            async with self._db.pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT monitored_channel_id FROM guild_settings WHERE guild_id = $1",
+                    str(guild_id),
+                )
+            if row and row["monitored_channel_id"] is not None:
+                return int(row["monitored_channel_id"])
+        except Exception:
+            pass
+        return None
+
+    async def set_monitored_channel(self, guild_id: int, channel_id: int) -> None:
+        """Set the channel the bot should monitor for corrections in this guild."""
+        async with self._db.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO guild_settings (guild_id, response_visibility, response_type, monitored_channel_id)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (guild_id) DO UPDATE SET
+                    monitored_channel_id = EXCLUDED.monitored_channel_id
+                """,
+                str(guild_id), _DEFAULT_VISIBILITY, _DEFAULT_TYPE, channel_id,
+            )
+        logger.info("Guild %s monitored_channel_id set to %d.", guild_id, channel_id)
