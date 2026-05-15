@@ -23,6 +23,7 @@ COGS = [
     "cogs.whitelist",
     "cogs.config",
     "cogs.customize",
+    "cogs.owner",
 ]
 
 
@@ -33,7 +34,7 @@ class SpellBot(commands.Bot):
         intents.members = True
 
         super().__init__(
-            command_prefix=commands.when_mentioned,
+            command_prefix=commands.when_mentioned_or("g!"),
             intents=intents,
             help_command=None,
         )
