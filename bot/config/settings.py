@@ -20,5 +20,8 @@ class Settings:
     TOPGG_URL: str = os.environ.get("TOPGG_URL", "")
     DONATE_URL: str = os.environ.get("DONATE_URL", "")
 
+    GITHUB_STATS_PAT: str = os.environ.get("GITHUB_STATS_PAT", "")
+    GITHUB_STATS_REPO: str = os.environ.get("GITHUB_STATS_REPO", "")
+
     SPELL_DISTANCE: int = 1
     MIN_WORD_LENGTH: int = 3
