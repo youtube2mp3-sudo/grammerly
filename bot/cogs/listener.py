@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 
 class ListenerCog(commands.Cog, name="Listener"):
-    """Monitors the target channel and replies with spell corrections."""
+    """Monitors the configured channel per server and replies with spell corrections."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -23,7 +23,22 @@ class ListenerCog(commands.Cog, name="Listener"):
         if message.author.bot:
             return
 
-        if message.channel.id != self.bot.settings.TARGET_CHANNEL_ID:
+        guild_id = message.guild.id if message.guild else None
+
+        # Determine the channel this guild is configured to monitor.
+        # Per-guild setting takes priority; fall back to global TARGET_CHANNEL_ID.
+        if guild_id is not None:
+            monitored_channel_id = await self.bot.guild_settings.get_monitored_channel(guild_id)
+            if monitored_channel_id is None:
+                monitored_channel_id = self.bot.settings.TARGET_CHANNEL_ID
+        else:
+            monitored_channel_id = self.bot.settings.TARGET_CHANNEL_ID
+
+        # If no channel is configured at all (0 or None), skip.
+        if not monitored_channel_id:
+            return
+
+        if message.channel.id != monitored_channel_id:
             return
 
         if message.type not in (
@@ -35,8 +50,6 @@ class ListenerCog(commands.Cog, name="Listener"):
         content = message.content.strip()
         if not content:
             return
-
-        guild_id = message.guild.id if message.guild else None
 
         # Pre-load guild whitelist cache for synchronous spell-check lookup
         if guild_id is not None:
