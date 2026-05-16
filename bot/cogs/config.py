@@ -212,6 +212,39 @@ class ConfigCog(commands.Cog, name="Config"):
             interaction.user, interaction.user.id, guild_id, channel.name, channel.id,
         )
 
+    @app_commands.command(
+        name="stop-responses",
+        description="Stop Grammerly from responding in the specified channel.",
+    )
+    @app_commands.describe(channel="The text channel where Grammerly should stop responding.")
+    async def stop_responses(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ) -> None:
+        if not _has_configure_permission(interaction):
+            await interaction.response.send_message(
+                "You need the **Manage Server** permission to stop responses in a channel.",
+                ephemeral=True,
+            )
+            return
+
+        guild_id = interaction.guild_id
+        if guild_id is None:
+            await interaction.response.send_message(
+                "This command can only be used inside a server.", ephemeral=True
+            )
+            return
+
+        await self.bot.guild_settings.set_stopped_channel(guild_id, channel.id)
+
+        await interaction.response.send_message(
+            f"Responses have been stopped in {channel.mention}.",
+            ephemeral=True,
+        )
+        logger.info(
+            "%s (%s) stopped responses in guild %s channel #%s (%d).",
+            interaction.user, interaction.user.id, guild_id, channel.name, channel.id,
+        )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ConfigCog(bot))
