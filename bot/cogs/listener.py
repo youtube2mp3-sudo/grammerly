@@ -41,6 +41,12 @@ class ListenerCog(commands.Cog, name="Listener"):
         if message.channel.id != monitored_channel_id:
             return
 
+        # Check if responses have been stopped in this channel.
+        if guild_id is not None:
+            stopped_channel_id = await self.bot.guild_settings.get_stopped_channel(guild_id)
+            if stopped_channel_id and message.channel.id == stopped_channel_id:
+                return
+
         if message.type not in (
             discord.MessageType.default,
             discord.MessageType.reply,

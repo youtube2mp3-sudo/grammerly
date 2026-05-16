@@ -43,6 +43,7 @@ _HELP_PAGES = [
             ("/configure-channel <channel>", "Set the channel Grammerly monitors for corrections. Requires Manage Server."),
             ("/configure-visibility <mode>", "Set responses to private or public. Requires Manage Server."),
             ("/configure-responses <type>", "Set responses to plain or embed format. Requires Manage Server."),
+            ("/stop-responses <channel>", "Stop Grammerly from responding in the specified channel. Requires Manage Server."),
             ("/customize-name <name>", "Set the bot nickname for this server. Requires Administrator."),
             ("/customize-pfp <image>", "Set the bot profile picture for this server. Requires Administrator."),
             ("/customize-banner <image>", "Set the bot banner for this server. Requires Administrator."),

@@ -28,7 +28,13 @@ class Database:
                 ADD COLUMN IF NOT EXISTS monitored_channel_id BIGINT;
                 """
             )
-        logger.info("Schema migration applied (monitored_channel_id).")
+            await conn.execute(
+                """
+                ALTER TABLE guild_settings
+                ADD COLUMN IF NOT EXISTS stopped_channel_id BIGINT;
+                """
+            )
+        logger.info("Schema migrations applied (monitored_channel_id, stopped_channel_id).")
 
     async def close(self) -> None:
         if self._pool:
