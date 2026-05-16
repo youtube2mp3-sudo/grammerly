@@ -50,3 +50,9 @@ Thumbs.db
 
 # Allow bot .env to be committed
 !bot/.env
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
