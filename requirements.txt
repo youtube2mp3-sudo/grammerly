@@ -3,3 +3,4 @@ python-dotenv>=1.0.0
 pyspellchecker>=0.8.1
 asyncpg>=0.29.0
 aiofiles>=23.2.1
+aiohttp>=3.9.0
