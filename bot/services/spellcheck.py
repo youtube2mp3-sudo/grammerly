@@ -89,13 +89,16 @@ class SpellCheckService:
 
     def __init__(self, settings: Settings, whitelist: WhitelistService) -> None:
         self._api_key: str = getattr(settings, "RAPIDAPI_KEY", "")
+        self._lt_url: str = getattr(settings, "LANGUAGETOOL_URL", "")
         self._min_length: int = settings.MIN_WORD_LENGTH
         self._whitelist = whitelist
 
         # Local fallback
         self._checker = SpellChecker(distance=settings.SPELL_DISTANCE)
 
-        if self._api_key:
+        if self._lt_url:
+            logger.info("SpellCheckService ready — self-hosted LanguageTool at %s.", self._lt_url)
+        elif self._api_key:
             logger.info("SpellCheckService ready — GrammarBot API enabled (local fallback active).")
         else:
             logger.info(
@@ -116,6 +119,20 @@ class SpellCheckService:
         Tries the GrammarBot API first (if configured); falls back to the local
         pyspellchecker on any error or timeout.
         """
+        # 1) Try self-hosted LanguageTool first
+        if self._lt_url:
+            try:
+                result = await asyncio.wait_for(
+                    self._lt_check(content, guild_id),
+                    timeout=_API_TIMEOUT,
+                )
+                return result
+            except asyncio.TimeoutError:
+                logger.warning("LanguageTool timed out after %.1fs — trying next fallback.", _API_TIMEOUT)
+            except Exception as exc:
+                logger.warning("LanguageTool error (%s) — trying next fallback.", exc)
+
+        # 2) Fall back to RapidAPI GrammarBot
         if self._api_key:
             try:
                 result = await asyncio.wait_for(
@@ -124,10 +141,11 @@ class SpellCheckService:
                 )
                 return result
             except asyncio.TimeoutError:
-                logger.warning("GrammarBot API timed out after %.1fs — using local fallback.", _API_TIMEOUT)
+                logger.warning("GrammarBot API timed out — using local fallback.")
             except Exception as exc:
                 logger.warning("GrammarBot API error (%s) — using local fallback.", exc)
 
+        # 3) Local pyspellchecker as last resort
         return self._local_check(content, guild_id)
 
     # ── GrammarBot API layer ──────────────────────────────────────────────────
@@ -156,6 +174,33 @@ class SpellCheckService:
         # If the API returns an error message instead of matches, fall through
         if "message" in data and "matches" not in data:
             raise RuntimeError(f"API message: {data['message']}")
+
+        return _parse_api_response(
+            data,
+            content,
+            self._whitelist.is_whitelisted_sync,
+            guild_id,
+        )
+
+    # ── Self-hosted LanguageTool layer ────────────────────────────────────────
+
+    async def _lt_check(
+        self, content: str, guild_id: int | None
+    ) -> list[tuple[str, str]]:
+        """Call a self-hosted LanguageTool API."""
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        body = urllib.parse.urlencode({"text": content, "language": "en-US"})
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self._lt_url,
+                data=body,
+                headers=headers,
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise RuntimeError(f"LanguageTool HTTP {resp.status}: {text[:120]}")
+                data: dict[str, Any] = await resp.json(content_type=None)
 
         return _parse_api_response(
             data,

@@ -28,6 +28,7 @@ class Settings:
     # to the local pyspellchecker if the API is unavailable.
     # Leave blank to use the local checker only.
     RAPIDAPI_KEY: str = os.environ.get("RAPIDAPI_KEY", "")
+    LANGUAGETOOL_URL: str = os.environ.get("LANGUAGETOOL_URL", "")
 
     SPELL_DISTANCE: int = 1
     MIN_WORD_LENGTH: int = 3
